@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { Prisma } from '@prisma/client';
+import { CreateUserDto } from 'src/dto/user/create-user.dto';
 
 @Controller('users')
 export class UserController {
@@ -25,7 +26,7 @@ export class UserController {
   }
 
   @Post()
-  createUser(@Body() data: { name: string; email: string; password: string }) {
+  createUser(@Body() data: CreateUserDto) {
     return this.userService.createUser(data);
   }
 
