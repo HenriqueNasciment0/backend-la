@@ -33,6 +33,10 @@ export class CreateJobDto {
 
   @IsString()
   @IsOptional()
+  cover?: string;
+
+  @IsString()
+  @IsOptional()
   customerLink?: string;
 
   @IsInt()

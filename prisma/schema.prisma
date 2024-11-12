@@ -26,6 +26,7 @@ model Job {
   id Int @id @default(autoincrement())
   customerId Int?
   payment String
+  cover String?
   photos String?
   customerLink String?
   discount Int?

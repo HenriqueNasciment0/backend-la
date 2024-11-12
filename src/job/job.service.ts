@@ -15,16 +15,8 @@ export class JobService {
     return this.prisma.job.findMany({
       include: {
         customer: true,
-        categories: {
-          include: {
-            category: true,
-          },
-        },
-        locations: {
-          include: {
-            location: true,
-          },
-        },
+        categories: { include: { category: true } },
+        locations: { include: { location: true } },
       },
     });
   }
