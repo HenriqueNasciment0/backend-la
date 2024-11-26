@@ -6,6 +6,7 @@ import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { CategoryModule } from './category/category.module';
 import { LocationModule } from './location/location.module';
+import { JobModule } from './job/job.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { LocationModule } from './location/location.module';
     AuthModule,
     CategoryModule,
     LocationModule,
+    JobModule,
   ],
   controllers: [AppController],
   providers: [AppService],

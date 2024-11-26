@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -18,23 +12,22 @@ model User {
   name String
   email String @unique
   password String
-  jobId Int?
   admin Boolean @default(false)
   refreshToken Int?
   createdAt DateTime @default(now())
   updateAt DateTime?
   deletedAt DateTime?
-  job Job? @relation(fields: [jobId], references: [id])
+
+  // Um usuário pode ter vários jobs (relação one-to-many)
+  jobs Job[]
 }
 
 model Job {
   id Int @id @default(autoincrement())
-  serviceId Int
   customerId Int?
-  locationId Int?
   payment String
-  photos String
-  customerLink String
+  photos String?
+  customerLink String?
   discount Int?
   closingDate DateTime?
   eventDate DateTime?
@@ -42,9 +35,13 @@ model Job {
   createdAt DateTime @default(now())
   updatedAt DateTime?
   deletedAt DateTime?
-  users User[]
-  service Category @relation(fields: [serviceId], references: [id])
-  location Location? @relation(fields: [locationId], references: [id])
+
+  // Relação com User (many-to-one)
+  customer User? @relation(fields: [customerId], references: [id])
+  
+  // Relações many-to-many
+  categories JobCategory[]
+  locations JobLocation[]
 }
 
 model Category {
@@ -56,7 +53,9 @@ model Category {
   createdAt DateTime @default(now())
   updatedAt DateTime?
   deletedAt DateTime?
-  job Job[]
+
+  // Relação many-to-many com Job
+  jobs JobCategory[]
 }
 
 model Location {
@@ -71,5 +70,32 @@ model Location {
   createdAt DateTime @default(now())
   updatedAt DateTime?
   deletedAt DateTime?
-  job Job[]
+
+  // Relação many-to-many com Job
+  jobs JobLocation[]
+}
+
+// Tabelas de junção para relações many-to-many
+model JobCategory {
+  jobId Int
+  categoryId Int
+  assignedAt DateTime @default(now())
+  assignedBy String?
+
+  job Job @relation(fields: [jobId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@id([jobId, categoryId])
+}
+
+model JobLocation {
+  jobId Int
+  locationId Int
+  assignedAt DateTime @default(now())
+  assignedBy String?
+
+  job Job @relation(fields: [jobId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@id([jobId, locationId])
 }

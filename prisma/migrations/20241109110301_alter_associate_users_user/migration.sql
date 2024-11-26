@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Job" ALTER COLUMN "photos" DROP NOT NULL,
+ALTER COLUMN "customerLink" DROP NOT NULL;
