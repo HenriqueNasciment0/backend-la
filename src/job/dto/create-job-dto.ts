@@ -10,6 +10,10 @@ import {
 
 export class CreateJobDto {
   @IsInt()
+  @IsOptional()
+  id?: number;
+
+  @IsInt()
   @IsNotEmpty()
   customerId: number;
 
@@ -23,13 +27,13 @@ export class CreateJobDto {
   @IsOptional()
   locationIds?: number[];
 
+  @IsArray()
+  @IsOptional()
+  photos?: Express.Multer.File[];
+
   @IsString()
   @IsNotEmpty()
   payment: string;
-
-  @IsString()
-  @IsOptional()
-  photos?: string;
 
   @IsString()
   @IsOptional()

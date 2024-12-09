@@ -9,11 +9,14 @@ import {
   HttpStatus,
   UseGuards,
   Patch,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
 import { JobService } from './job.service';
 import { CreateJobDto } from './dto/create-job-dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { Job } from '@prisma/client';
+import { FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller('jobs')
 export class JobController {
@@ -61,9 +64,13 @@ export class JobController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  async createJob(@Body() createJobDto: CreateJobDto): Promise<Job> {
+  @UseInterceptors(FilesInterceptor('photos', 10))
+  async createJob(
+    @Body() createJobDto: CreateJobDto,
+    @UploadedFiles() photos?: Express.Multer.File[],
+  ): Promise<Job> {
     try {
-      return await this.jobService.createJob(createJobDto);
+      return await this.jobService.createJob(createJobDto, photos);
     } catch (error) {
       throw new HttpException(
         {
@@ -78,11 +85,16 @@ export class JobController {
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id')
+  @UseInterceptors(FilesInterceptor('photos', 10))
   async updateJob(
     @Param('id') id: string,
     @Body() data: Partial<CreateJobDto>,
+    @UploadedFiles() photos?: Express.Multer.File[],
   ): Promise<Job> {
-    return this.jobService.updateJob({ where: { id: Number(id) }, data });
+    return this.jobService.updateJob(
+      { where: { id: Number(id) }, data },
+      photos,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

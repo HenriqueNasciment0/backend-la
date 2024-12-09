@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { CategoryModule } from './category/category.module';
 import { LocationModule } from './location/location.module';
 import { JobModule } from './job/job.module';
+import { PinataModule } from './pinata/pinata.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { JobModule } from './job/job.module';
     CategoryModule,
     LocationModule,
     JobModule,
+    PinataModule,
   ],
   controllers: [AppController],
   providers: [AppService],

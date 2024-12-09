@@ -6,10 +6,14 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { Job, Prisma } from '@prisma/client';
 import { CreateJobDto } from './dto/create-job-dto';
+import { PinataService } from 'src/pinata/pinata.service';
 
 @Injectable()
 export class JobService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private pinataService: PinataService,
+  ) {}
 
   async getJobs(): Promise<Job[]> {
     return this.prisma.job.findMany({
@@ -17,6 +21,7 @@ export class JobService {
         customer: true,
         categories: { include: { category: true } },
         locations: { include: { location: true } },
+        photos: true,
       },
     });
   }
@@ -36,37 +41,41 @@ export class JobService {
             location: true,
           },
         },
+        photos: true,
       },
     });
   }
 
-  async createJob(data: CreateJobDto): Promise<Job> {
+  async createJob(
+    data: CreateJobDto,
+    files?: Express.Multer.File[],
+  ): Promise<Job> {
+    // Validate customer
     const customer = await this.prisma.user.findUnique({
       where: { id: data.customerId },
     });
-
     if (!customer) {
       throw new NotFoundException(
         `Customer with ID ${data.customerId} not found`,
       );
     }
 
+    // Validate categories
     for (const categoryId of data.categoryIds) {
       const category = await this.prisma.category.findUnique({
         where: { id: categoryId },
       });
-
       if (!category) {
         throw new NotFoundException(`Category with ID ${categoryId} not found`);
       }
     }
 
+    // Validate locations
     if (data.locationIds) {
       for (const locationId of data.locationIds) {
         const location = await this.prisma.location.findUnique({
           where: { id: locationId },
         });
-
         if (!location) {
           throw new NotFoundException(
             `Location with ID ${locationId} not found`,
@@ -75,11 +84,27 @@ export class JobService {
       }
     }
 
+    // Create Pinata group for job photos
+    const photoGroup = await this.pinataService.createGroup(
+      `Job-${data.customerId}-Photos`,
+    );
+
+    // Upload photos to Pinata
+    const photoUrls: string[] = [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const uploadResult = await this.pinataService.uploadFileToGroup(
+          photoGroup.id,
+          file,
+        );
+        photoUrls.push(uploadResult.url);
+      }
+    }
+
     try {
-      return await this.prisma.job.create({
+      const job = await this.prisma.job.create({
         data: {
           payment: data.payment,
-          photos: data.photos,
           customerLink: data.customerLink,
           discount: data.discount,
           closingDate: data.closingDate,
@@ -104,6 +129,11 @@ export class JobService {
                 })),
               }
             : undefined,
+          photos: {
+            create: photoUrls.map((url) => ({
+              photoUrl: url,
+            })),
+          },
         },
         include: {
           customer: true,
@@ -117,17 +147,23 @@ export class JobService {
               location: true,
             },
           },
+          photos: true,
         },
       });
+
+      return job;
     } catch (error) {
       throw new BadRequestException(`Failed to create job: ${error.message}`);
     }
   }
 
-  async updateJob(params: {
-    where: Prisma.JobWhereUniqueInput;
-    data: Partial<CreateJobDto>;
-  }): Promise<Job> {
+  async updateJob(
+    params: {
+      where: Prisma.JobWhereUniqueInput;
+      data: Partial<CreateJobDto>;
+    },
+    files?: Express.Multer.File[],
+  ): Promise<Job> {
     const { where, data } = params;
     const job = await this.prisma.job.findUnique({ where });
 
@@ -135,16 +171,61 @@ export class JobService {
       throw new NotFoundException(`Job not found`);
     }
 
-    if (data.categoryIds) {
-      await this.prisma.jobCategory.deleteMany({
-        where: { jobId: job.id },
+    // Validate customer if provided
+    if (data.customerId) {
+      const customer = await this.prisma.user.findUnique({
+        where: { id: data.customerId },
       });
+      if (!customer) {
+        throw new NotFoundException(
+          `Customer with ID ${data.customerId} not found`,
+        );
+      }
     }
 
+    // Validate categories if provided
+    if (data.categoryIds) {
+      for (const categoryId of data.categoryIds) {
+        const category = await this.prisma.category.findUnique({
+          where: { id: categoryId },
+        });
+        if (!category) {
+          throw new NotFoundException(
+            `Category with ID ${categoryId} not found`,
+          );
+        }
+      }
+    }
+
+    // Validate locations if provided
     if (data.locationIds) {
-      await this.prisma.jobLocation.deleteMany({
-        where: { jobId: job.id },
-      });
+      for (const locationId of data.locationIds) {
+        const location = await this.prisma.location.findUnique({
+          where: { id: locationId },
+        });
+        if (!location) {
+          throw new NotFoundException(
+            `Location with ID ${locationId} not found`,
+          );
+        }
+      }
+    }
+
+    // Upload new photos to Pinata
+    const photoUrls: string[] = [];
+    if (files && files.length > 0) {
+      // Create or reuse existing Pinata group
+      const photoGroup = await this.pinataService.createGroup(
+        `Job-${job.customerId}-Photos`,
+      );
+
+      for (const file of files) {
+        const uploadResult = await this.pinataService.uploadFileToGroup(
+          photoGroup.id,
+          file,
+        );
+        photoUrls.push(uploadResult.url);
+      }
     }
 
     try {
@@ -152,48 +233,44 @@ export class JobService {
         where,
         data: {
           payment: data.payment,
-          photos: data.photos,
           customerLink: data.customerLink,
           discount: data.discount,
           closingDate: data.closingDate,
           eventDate: data.eventDate,
           gift: data.gift,
           customer: data.customerId
-            ? {
-                connect: { id: data.customerId },
-              }
+            ? { connect: { id: data.customerId } }
             : undefined,
           categories: data.categoryIds
             ? {
+                deleteMany: { jobId: job.id },
                 create: data.categoryIds.map((categoryId) => ({
-                  category: {
-                    connect: { id: categoryId },
-                  },
+                  category: { connect: { id: categoryId } },
                 })),
               }
             : undefined,
           locations: data.locationIds
             ? {
+                deleteMany: { jobId: job.id },
                 create: data.locationIds.map((locationId) => ({
-                  location: {
-                    connect: { id: locationId },
-                  },
+                  location: { connect: { id: locationId } },
                 })),
               }
             : undefined,
+          photos:
+            photoUrls.length > 0
+              ? {
+                  create: photoUrls.map((url) => ({
+                    photoUrl: url,
+                  })),
+                }
+              : undefined,
         },
         include: {
           customer: true,
-          categories: {
-            include: {
-              category: true,
-            },
-          },
-          locations: {
-            include: {
-              location: true,
-            },
-          },
+          categories: { include: { category: true } },
+          locations: { include: { location: true } },
+          photos: true,
         },
       });
     } catch (error) {
