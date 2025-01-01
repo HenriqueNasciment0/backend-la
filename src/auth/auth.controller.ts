@@ -23,13 +23,8 @@ export class AuthController {
   @UseGuards(LocalAuthGuard)
   @Post('login')
   async login(@Req() req: Request, @Res() res: Response) {
-    try {
-      console.log('req.user', req.user);
-      await this.authService.login(req.user, res);
-      return res.status(200).json({ message: 'Login successful', status: 200 });
-    } catch (err) {
-      return res.status(400).json({ message: err.message, status: 400 });
-    }
+    await this.authService.login(req.user, res);
+    return res.status(200).json({ message: 'Login successful', status: 200 });
   }
 
   @UseGuards(JwtAuthGuard)

@@ -8,6 +8,9 @@ import { Job, Prisma } from '@prisma/client';
 import { CreateJobDto } from './dto/create-job-dto';
 import { PinataService } from 'src/pinata/pinata.service';
 
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+
 @Injectable()
 export class JobService {
   constructor(
@@ -51,6 +54,14 @@ export class JobService {
     files?: Express.Multer.File[],
   ): Promise<Job> {
     // Validate customer
+    const dto = plainToInstance(CreateJobDto, data);
+    const errors = await validate(dto);
+    if (errors.length > 0) {
+      console.error('Validation errors:', errors);
+      throw new BadRequestException('Validation failed');
+    }
+    console.log('Validated and transformed DTO:', dto);
+
     const customer = await this.prisma.user.findUnique({
       where: { id: data.customerId },
     });
@@ -59,6 +70,7 @@ export class JobService {
         `Customer with ID ${data.customerId} not found`,
       );
     }
+    console.log('customer', customer);
 
     // Validate categories
     for (const categoryId of data.categoryIds) {
@@ -171,7 +183,6 @@ export class JobService {
       throw new NotFoundException(`Job not found`);
     }
 
-    // Validate customer if provided
     if (data.customerId) {
       const customer = await this.prisma.user.findUnique({
         where: { id: data.customerId },
@@ -183,7 +194,6 @@ export class JobService {
       }
     }
 
-    // Validate categories if provided
     if (data.categoryIds) {
       for (const categoryId of data.categoryIds) {
         const category = await this.prisma.category.findUnique({
@@ -197,7 +207,6 @@ export class JobService {
       }
     }
 
-    // Validate locations if provided
     if (data.locationIds) {
       for (const locationId of data.locationIds) {
         const location = await this.prisma.location.findUnique({
@@ -211,7 +220,6 @@ export class JobService {
       }
     }
 
-    // Upload new photos to Pinata
     const photoUrls: string[] = [];
     if (files && files.length > 0) {
       // Create or reuse existing Pinata group

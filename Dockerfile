@@ -2,7 +2,7 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache python3 make g++ 
+RUN apk add --no-cache python3 make g++ openssl
 
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -21,7 +21,7 @@ FROM node:18-alpine AS production
 
 WORKDIR /app
 
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache python3 make g++ openssl
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules

@@ -7,7 +7,11 @@ export class CategoryService {
   constructor(private prisma: PrismaService) {}
 
   async getCategories(): Promise<Category[]> {
-    return this.prisma.category.findMany();
+    return this.prisma.category.findMany({
+      orderBy: {
+        price: 'asc',
+      },
+    });
   }
 
   async getCategoryById(
@@ -25,7 +29,13 @@ export class CategoryService {
     data: Prisma.CategoryUpdateInput;
   }): Promise<Category> {
     const { where, data } = params;
-    return this.prisma.category.update({ data, where });
+    return this.prisma.category.update({
+      data: {
+        ...data,
+        updatedAt: new Date(),
+      },
+      where,
+    });
   }
 
   async deleteCategory(

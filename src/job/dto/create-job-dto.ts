@@ -7,6 +7,7 @@ import {
   IsBoolean,
   IsArray,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateJobDto {
   @IsInt()
@@ -15,11 +16,13 @@ export class CreateJobDto {
 
   @IsInt()
   @IsNotEmpty()
+  @Type(() => Number)
   customerId: number;
 
   @IsArray()
   @IsInt({ each: true })
   @IsNotEmpty()
+  @Type(() => Number)
   categoryIds: number[];
 
   @IsArray()

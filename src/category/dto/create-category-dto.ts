@@ -10,8 +10,10 @@ export class CreateCategoryDto {
   price: number;
 
   @IsString()
+  @IsNotEmpty()
   description: string;
 
   @IsInt()
+  @IsNotEmpty()
   workingMinutes: number;
 }
