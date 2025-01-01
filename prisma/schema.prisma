@@ -13,20 +13,35 @@ model User {
   email String @unique
   password String
   admin Boolean @default(false)
-  refreshToken Int?
   createdAt DateTime @default(now())
   updateAt DateTime?
   deletedAt DateTime?
 
   // Um usuário pode ter vários jobs (relação one-to-many)
   jobs Job[]
+
+  // Relação com RefreshToken (one-to-many)
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id Int @id @default(autoincrement())
+  token String
+  userId Int
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  // Relação com User (many-to-one)
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId]) // Índice para melhorar a busca por userId
 }
 
 model Job {
   id Int @id @default(autoincrement())
   customerId Int?
   payment String
-  photos String?
+  cover String?
   customerLink String?
   discount Int?
   closingDate DateTime?
@@ -42,6 +57,9 @@ model Job {
   // Relações many-to-many
   categories JobCategory[]
   locations JobLocation[]
+
+  // Relação one-to-many
+  photos JobPhoto[]
 }
 
 model Category {
@@ -99,3 +117,15 @@ model JobLocation {
 
   @@id([jobId, locationId])
 }
+
+model JobPhoto {
+  id Int @id @default(autoincrement())
+  jobId Int
+  photoUrl String
+  uploadedAt DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id])
+
+  @@index([jobId]) // Índice para otimizar consultas por Job
+}
+

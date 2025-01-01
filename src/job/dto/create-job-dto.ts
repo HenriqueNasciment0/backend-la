@@ -7,15 +7,22 @@ import {
   IsBoolean,
   IsArray,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateJobDto {
   @IsInt()
+  @IsOptional()
+  id?: number;
+
+  @IsInt()
   @IsNotEmpty()
+  @Type(() => Number)
   customerId: number;
 
   @IsArray()
   @IsInt({ each: true })
   @IsNotEmpty()
+  @Type(() => Number)
   categoryIds: number[];
 
   @IsArray()
@@ -23,13 +30,17 @@ export class CreateJobDto {
   @IsOptional()
   locationIds?: number[];
 
+  @IsArray()
+  @IsOptional()
+  photos?: Express.Multer.File[];
+
   @IsString()
   @IsNotEmpty()
   payment: string;
 
   @IsString()
   @IsOptional()
-  photos?: string;
+  cover?: string;
 
   @IsString()
   @IsOptional()
