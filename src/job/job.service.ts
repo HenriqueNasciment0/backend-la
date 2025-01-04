@@ -24,6 +24,7 @@ export class JobService {
         customer: true,
         categories: { include: { category: true } },
         locations: { include: { location: true } },
+        payments: { include: { payment: true } },
         photos: true,
       },
     });

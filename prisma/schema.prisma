@@ -57,6 +57,7 @@ model Job {
   // Relações many-to-many
   categories JobCategory[]
   locations JobLocation[]
+  payments JobPayment[]
 
   // Relação one-to-many
   photos JobPhoto[]
@@ -74,6 +75,23 @@ model Category {
 
   // Relação many-to-many com Job
   jobs JobCategory[]
+}
+
+model Payment {
+  id Int @id @default(autoincrement())
+  name String
+  times Int?
+  observation String?
+  firstDate DateTime?
+  lastDate DateTime?
+  dayOfPayment DateTime?
+  installmentDate Int?
+  giftGiver String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime?
+  deletedAt DateTime?
+
+  jobs JobPayment[]
 }
 
 model Location {
@@ -116,6 +134,18 @@ model JobLocation {
   location Location @relation(fields: [locationId], references: [id])
 
   @@id([jobId, locationId])
+}
+
+model JobPayment {
+  jobId Int
+  paymentId Int
+    assignedAt DateTime @default(now())
+  assignedBy String?
+
+    job Job @relation(fields: [jobId], references: [id])
+   payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@id([jobId, paymentId])
 }
 
 model JobPhoto {

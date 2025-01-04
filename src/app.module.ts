@@ -8,6 +8,7 @@ import { CategoryModule } from './category/category.module';
 import { LocationModule } from './location/location.module';
 import { JobModule } from './job/job.module';
 import { PinataModule } from './pinata/pinata.module';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { PinataModule } from './pinata/pinata.module';
     LocationModule,
     JobModule,
     PinataModule,
+    PaymentModule,
   ],
   controllers: [AppController],
   providers: [AppService],
