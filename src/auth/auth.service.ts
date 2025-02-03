@@ -21,7 +21,8 @@ export class AuthService {
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.userService.findByEmail(email);
     if (user && user.password && (await bcrypt.compare(pass, user.password))) {
-      return { ...user };
+      const userWithoutPassword = { ...user, password: undefined };
+      return userWithoutPassword;
     }
     return null;
   }
@@ -31,9 +32,11 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+
     await this.prisma.refreshToken.create({
       data: {
-        token: refreshToken,
+        token: hashedRefreshToken,
         userId: user.id,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
@@ -58,7 +61,6 @@ export class AuthService {
 
   async refreshToken(req: Request, res: Response) {
     const refreshToken = req.cookies['refresh-token'];
-    console.log('refreshToken', refreshToken);
 
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token is required');
@@ -67,23 +69,46 @@ export class AuthService {
     let payload: JwtPayload;
     try {
       payload = this.jwtService.verify(refreshToken);
-      console.log('payload', payload);
     } catch (err) {
       throw new UnauthorizedException('Invalid refresh token', err);
     }
 
     const storedToken = await this.prisma.refreshToken.findFirst({
-      where: { token: refreshToken },
+      where: { userId: payload.sub },
     });
 
-    if (!storedToken || storedToken.expiresAt < new Date()) {
-      throw new UnauthorizedException('Refresh token expired or invalid');
+    if (!storedToken) {
+      throw new UnauthorizedException('Refresh token not found');
     }
+
+    const isTokenValid = await bcrypt.compare(refreshToken, storedToken.token);
+    if (!isTokenValid) {
+      throw new UnauthorizedException('Refresh token invalid');
+    }
+
+    await this.prisma.refreshToken.delete({
+      where: { id: storedToken.id },
+    });
 
     const newAccessToken = this.jwtService.sign(
       { email: payload.email, sub: payload.sub },
       { expiresIn: '15m' },
     );
+
+    const newRefreshToken = this.jwtService.sign(
+      { email: payload.email, sub: payload.sub },
+      { expiresIn: '7d' },
+    );
+
+    const hashedRefreshToken = await bcrypt.hash(newRefreshToken, 10);
+
+    await this.prisma.refreshToken.create({
+      data: {
+        token: hashedRefreshToken,
+        userId: payload.sub,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
 
     res.cookie('auth-token', newAccessToken, {
       httpOnly: true,
@@ -92,7 +117,14 @@ export class AuthService {
       maxAge: 15 * 60 * 1000,
     });
 
-    return { message: 'Access token refreshed' };
+    res.cookie('refresh-token', newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return { message: 'Token refreshed successfully' };
   }
 
   async getCurrentUser(req: Request) {
@@ -126,10 +158,15 @@ export class AuthService {
     return bcrypt.hash(password, salt);
   }
 
-  async logout(refreshToken: string) {
-    await this.prisma.refreshToken.deleteMany({
-      where: { token: refreshToken },
-    });
-    return { message: 'Logged out successfully' };
+  async logout(req: Request, res: Response) {
+    res.clearCookie('auth-token');
+    res.clearCookie('refresh-token');
+
+    const refreshToken = req.cookies['refresh-token'];
+    if (refreshToken) {
+      await this.prisma.refreshToken.deleteMany({
+        where: { token: refreshToken },
+      });
+    }
   }
 }

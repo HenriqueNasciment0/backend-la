@@ -7,8 +7,9 @@ import { AuthModule } from './auth/auth.module';
 import { CategoryModule } from './category/category.module';
 import { LocationModule } from './location/location.module';
 import { JobModule } from './job/job.module';
-import { PinataModule } from './pinata/pinata.module';
 import { PaymentModule } from './payment/payment.module';
+import { AwsS3Module } from './aws-s3/aws-s3.module';
+import { JobPhotosModule } from './job-photos/job-photos.module';
 
 @Module({
   imports: [
@@ -18,8 +19,9 @@ import { PaymentModule } from './payment/payment.module';
     CategoryModule,
     LocationModule,
     JobModule,
-    PinataModule,
     PaymentModule,
+    AwsS3Module,
+    JobPhotosModule,
   ],
   controllers: [AppController],
   providers: [AppService],

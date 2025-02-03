@@ -39,8 +39,9 @@ model RefreshToken {
 
 model Job {
   id Int @id @default(autoincrement())
+  name String
   customerId Int?
-  payment String
+  payment String?
   cover String?
   customerLink String?
   discount Int?
@@ -80,13 +81,7 @@ model Category {
 model Payment {
   id Int @id @default(autoincrement())
   name String
-  times Int?
-  observation String?
-  firstDate DateTime?
-  lastDate DateTime?
-  dayOfPayment DateTime?
-  installmentDate Int?
-  giftGiver String?
+  description String?
   createdAt DateTime @default(now())
   updatedAt DateTime?
   deletedAt DateTime?
@@ -139,13 +134,22 @@ model JobLocation {
 model JobPayment {
   jobId Int
   paymentId Int
-    assignedAt DateTime @default(now())
-  assignedBy String?
+  times Int?
+  observation String?
+  firstDate DateTime?
+  lastDate DateTime?
+  dayOfPayment DateTime?
+  installmentDate Int?
+  giftGiver String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime?
 
     job Job @relation(fields: [jobId], references: [id])
    payment Payment @relation(fields: [paymentId], references: [id])
 
   @@id([jobId, paymentId])
+  @@index([jobId])
+  @@index([paymentId])
 }
 
 model JobPhoto {

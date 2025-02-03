@@ -7,12 +7,12 @@ import {
   IsBoolean,
   IsArray,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export class CreateJobDto {
-  @IsInt()
-  @IsOptional()
-  id?: number;
+  @IsString()
+  @IsNotEmpty()
+  name: string;
 
   @IsInt()
   @IsNotEmpty()
@@ -22,12 +22,37 @@ export class CreateJobDto {
   @IsArray()
   @IsInt({ each: true })
   @IsNotEmpty()
-  @Type(() => Number)
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value); // Parseia o JSON
+        if (Array.isArray(parsed)) return parsed.map((v) => parseInt(v, 10));
+        throw new Error('categoryIds must be an array');
+      } catch {
+        throw new Error('Invalid JSON format for categoryIds');
+      }
+    }
+    if (Array.isArray(value)) return value.map((v) => parseInt(v, 10));
+    return value;
+  })
   categoryIds: number[];
 
   @IsArray()
   @IsInt({ each: true })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) return parsed.map((v) => parseInt(v, 10));
+        throw new Error('locationIds must be an array');
+      } catch {
+        throw new Error('Invalid JSON format for locationIds');
+      }
+    }
+    if (Array.isArray(value)) return value.map((v) => parseInt(v, 10));
+    return value;
+  })
   locationIds?: number[];
 
   @IsArray()
@@ -35,7 +60,7 @@ export class CreateJobDto {
   photos?: Express.Multer.File[];
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   payment: string;
 
   @IsString()
