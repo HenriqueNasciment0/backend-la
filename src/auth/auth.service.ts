@@ -8,6 +8,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 interface JwtPayload {
   email: string;
   sub: number;
+  tokenId?: string;
+  revoked?: boolean;
 }
 
 @Injectable()
@@ -30,17 +32,18 @@ export class AuthService {
   async login(user: any, res: Response) {
     const payload: JwtPayload = { email: user.email, sub: user.id };
     const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
-    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
-    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-
-    await this.prisma.refreshToken.create({
+    const refreshTokenEntry = await this.prisma.refreshToken.create({
       data: {
-        token: hashedRefreshToken,
         userId: user.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
       },
     });
+
+    const refreshToken = this.jwtService.sign(
+      { sub: user.id, email: user.email, tokenId: refreshTokenEntry.id },
+      { expiresIn: '7d' },
+    );
 
     res.cookie('auth-token', accessToken, {
       httpOnly: true,
@@ -70,45 +73,44 @@ export class AuthService {
     try {
       payload = this.jwtService.verify(refreshToken);
     } catch (err) {
-      throw new UnauthorizedException('Invalid refresh token', err);
+      throw new UnauthorizedException(err, 'Invalid refresh token');
     }
 
-    const storedToken = await this.prisma.refreshToken.findFirst({
-      where: { userId: payload.sub },
+    const now = new Date();
+
+    await this.prisma.refreshToken.deleteMany({
+      where: { expiresAt: { lt: now } },
     });
 
-    if (!storedToken) {
-      throw new UnauthorizedException('Refresh token not found');
+    const storedToken = await this.prisma.refreshToken.findUnique({
+      where: { id: payload.tokenId },
+    });
+
+    if (!storedToken || storedToken.revoked) {
+      throw new UnauthorizedException('Refresh token is invalid or revoked');
     }
 
-    const isTokenValid = await bcrypt.compare(refreshToken, storedToken.token);
-    if (!isTokenValid) {
-      throw new UnauthorizedException('Refresh token invalid');
-    }
-
-    await this.prisma.refreshToken.delete({
+    await this.prisma.refreshToken.update({
       where: { id: storedToken.id },
+      data: { revoked: true },
     });
 
-    const newAccessToken = this.jwtService.sign(
-      { email: payload.email, sub: payload.sub },
-      { expiresIn: '15m' },
-    );
+    const newToken = await this.prisma.refreshToken.create({
+      data: {
+        userId: payload.sub,
+        expiresAt: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
+      },
+    });
 
     const newRefreshToken = this.jwtService.sign(
-      { email: payload.email, sub: payload.sub },
+      { sub: payload.sub, email: payload.email, tokenId: newToken.id },
       { expiresIn: '7d' },
     );
 
-    const hashedRefreshToken = await bcrypt.hash(newRefreshToken, 10);
-
-    await this.prisma.refreshToken.create({
-      data: {
-        token: hashedRefreshToken,
-        userId: payload.sub,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
+    const newAccessToken = this.jwtService.sign(
+      { sub: payload.sub, email: payload.email, tokenId: newToken.id },
+      { expiresIn: '15m' },
+    );
 
     res.cookie('auth-token', newAccessToken, {
       httpOnly: true,
@@ -149,7 +151,7 @@ export class AuthService {
       id: user.id,
       name: user.name,
       email: user.email,
-      admin: user.admin,
+      // admin: user.admin,
     };
   }
 
@@ -159,14 +161,20 @@ export class AuthService {
   }
 
   async logout(req: Request, res: Response) {
+    const refreshToken = req.cookies['refresh-token'];
     res.clearCookie('auth-token');
     res.clearCookie('refresh-token');
 
-    const refreshToken = req.cookies['refresh-token'];
     if (refreshToken) {
-      await this.prisma.refreshToken.deleteMany({
-        where: { token: refreshToken },
-      });
+      try {
+        const payload = this.jwtService.verify(refreshToken);
+        await this.prisma.refreshToken.update({
+          where: { id: payload.tokenId },
+          data: { revoked: true },
+        });
+      } catch (err) {
+        console.error(err);
+      }
     }
   }
 }
