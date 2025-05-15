@@ -8,6 +8,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 interface JwtPayload {
   email: string;
   sub: number;
+  tokenId?: string;
+  revoked?: boolean;
 }
 
 @Injectable()
@@ -21,7 +23,8 @@ export class AuthService {
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.userService.findByEmail(email);
     if (user && user.password && (await bcrypt.compare(pass, user.password))) {
-      return { ...user };
+      const userWithoutPassword = { ...user, password: undefined };
+      return userWithoutPassword;
     }
     return null;
   }
@@ -29,15 +32,18 @@ export class AuthService {
   async login(user: any, res: Response) {
     const payload: JwtPayload = { email: user.email, sub: user.id };
     const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
-    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
-    await this.prisma.refreshToken.create({
+    const refreshTokenEntry = await this.prisma.refreshToken.create({
       data: {
-        token: refreshToken,
         userId: user.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
       },
     });
+
+    const refreshToken = this.jwtService.sign(
+      { sub: user.id, email: user.email, tokenId: refreshTokenEntry.id },
+      { expiresIn: '7d' },
+    );
 
     res.cookie('auth-token', accessToken, {
       httpOnly: true,
@@ -58,7 +64,6 @@ export class AuthService {
 
   async refreshToken(req: Request, res: Response) {
     const refreshToken = req.cookies['refresh-token'];
-    console.log('refreshToken', refreshToken);
 
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token is required');
@@ -67,21 +72,43 @@ export class AuthService {
     let payload: JwtPayload;
     try {
       payload = this.jwtService.verify(refreshToken);
-      console.log('payload', payload);
     } catch (err) {
-      throw new UnauthorizedException('Invalid refresh token', err);
+      throw new UnauthorizedException(err, 'Invalid refresh token');
     }
 
-    const storedToken = await this.prisma.refreshToken.findFirst({
-      where: { token: refreshToken },
+    const now = new Date();
+
+    await this.prisma.refreshToken.deleteMany({
+      where: { expiresAt: { lt: now } },
     });
 
-    if (!storedToken || storedToken.expiresAt < new Date()) {
-      throw new UnauthorizedException('Refresh token expired or invalid');
+    const storedToken = await this.prisma.refreshToken.findUnique({
+      where: { id: payload.tokenId },
+    });
+
+    if (!storedToken || storedToken.revoked) {
+      throw new UnauthorizedException('Refresh token is invalid or revoked');
     }
 
+    await this.prisma.refreshToken.update({
+      where: { id: storedToken.id },
+      data: { revoked: true },
+    });
+
+    const newToken = await this.prisma.refreshToken.create({
+      data: {
+        userId: payload.sub,
+        expiresAt: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const newRefreshToken = this.jwtService.sign(
+      { sub: payload.sub, email: payload.email, tokenId: newToken.id },
+      { expiresIn: '7d' },
+    );
+
     const newAccessToken = this.jwtService.sign(
-      { email: payload.email, sub: payload.sub },
+      { sub: payload.sub, email: payload.email, tokenId: newToken.id },
       { expiresIn: '15m' },
     );
 
@@ -92,7 +119,14 @@ export class AuthService {
       maxAge: 15 * 60 * 1000,
     });
 
-    return { message: 'Access token refreshed' };
+    res.cookie('refresh-token', newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return { message: 'Token refreshed successfully' };
   }
 
   async getCurrentUser(req: Request) {
@@ -117,7 +151,7 @@ export class AuthService {
       id: user.id,
       name: user.name,
       email: user.email,
-      admin: user.admin,
+      // admin: user.admin,
     };
   }
 
@@ -126,10 +160,21 @@ export class AuthService {
     return bcrypt.hash(password, salt);
   }
 
-  async logout(refreshToken: string) {
-    await this.prisma.refreshToken.deleteMany({
-      where: { token: refreshToken },
-    });
-    return { message: 'Logged out successfully' };
+  async logout(req: Request, res: Response) {
+    const refreshToken = req.cookies['refresh-token'];
+    res.clearCookie('auth-token');
+    res.clearCookie('refresh-token');
+
+    if (refreshToken) {
+      try {
+        const payload = this.jwtService.verify(refreshToken);
+        await this.prisma.refreshToken.update({
+          where: { id: payload.tokenId },
+          data: { revoked: true },
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
   }
 }

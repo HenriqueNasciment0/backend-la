@@ -2,10 +2,10 @@ import { Module } from '@nestjs/common';
 import { JobService } from './job.service';
 import { JobController } from './job.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
-import { PinataModule } from 'src/pinata/pinata.module';
+import { JobPhotosModule } from 'src/job-photos/job-photos.module';
 
 @Module({
-  imports: [PrismaModule, PinataModule],
+  imports: [PrismaModule, JobPhotosModule],
   providers: [JobService],
   controllers: [JobController],
 })

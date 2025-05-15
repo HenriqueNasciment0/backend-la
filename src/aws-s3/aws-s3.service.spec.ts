@@ -1,15 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { PinataService } from './pinata.service';
+import { AwsS3Service } from './aws-s3.service';
 
-describe('PinataService', () => {
-  let service: PinataService;
+describe('AwsS3Service', () => {
+  let service: AwsS3Service;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [PinataService],
+      providers: [AwsS3Service],
     }).compile();
 
-    service = module.get<PinataService>(PinataService);
+    service = module.get<AwsS3Service>(AwsS3Service);
   });
 
   it('should be defined', () => {

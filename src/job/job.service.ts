@@ -6,16 +6,15 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { Job, Prisma } from '@prisma/client';
 import { CreateJobDto } from './dto/create-job-dto';
-import { PinataService } from 'src/pinata/pinata.service';
-
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { JobPhotosService } from 'src/job-photos/job-photos.service';
 
 @Injectable()
 export class JobService {
   constructor(
     private prisma: PrismaService,
-    private pinataService: PinataService,
+    private jobPhotosService: JobPhotosService,
   ) {}
 
   async getJobs(): Promise<Job[]> {
@@ -24,6 +23,7 @@ export class JobService {
         customer: true,
         categories: { include: { category: true } },
         locations: { include: { location: true } },
+        payments: { include: { payment: true } },
         photos: true,
       },
     });
@@ -53,14 +53,12 @@ export class JobService {
     data: CreateJobDto,
     files?: Express.Multer.File[],
   ): Promise<Job> {
-    // Validate customer
+    console.log('data', data);
     const dto = plainToInstance(CreateJobDto, data);
     const errors = await validate(dto);
     if (errors.length > 0) {
-      console.error('Validation errors:', errors);
       throw new BadRequestException('Validation failed');
     }
-    console.log('Validated and transformed DTO:', dto);
 
     const customer = await this.prisma.user.findUnique({
       where: { id: data.customerId },
@@ -70,98 +68,70 @@ export class JobService {
         `Customer with ID ${data.customerId} not found`,
       );
     }
-    console.log('customer', customer);
-
-    // Validate categories
-    for (const categoryId of data.categoryIds) {
-      const category = await this.prisma.category.findUnique({
-        where: { id: categoryId },
-      });
-      if (!category) {
-        throw new NotFoundException(`Category with ID ${categoryId} not found`);
-      }
-    }
-
-    // Validate locations
-    if (data.locationIds) {
-      for (const locationId of data.locationIds) {
-        const location = await this.prisma.location.findUnique({
-          where: { id: locationId },
-        });
-        if (!location) {
-          throw new NotFoundException(
-            `Location with ID ${locationId} not found`,
-          );
-        }
-      }
-    }
-
-    // Create Pinata group for job photos
-    const photoGroup = await this.pinataService.createGroup(
-      `Job-${data.customerId}-Photos`,
-    );
-
-    // Upload photos to Pinata
-    const photoUrls: string[] = [];
-    if (files && files.length > 0) {
-      for (const file of files) {
-        const uploadResult = await this.pinataService.uploadFileToGroup(
-          photoGroup.id,
-          file,
-        );
-        photoUrls.push(uploadResult.url);
-      }
-    }
 
     try {
-      const job = await this.prisma.job.create({
-        data: {
-          payment: data.payment,
-          customerLink: data.customerLink,
-          discount: data.discount,
-          closingDate: data.closingDate,
-          eventDate: data.eventDate,
-          gift: data.gift,
-          customer: {
-            connect: { id: data.customerId },
-          },
-          categories: {
-            create: data.categoryIds.map((categoryId) => ({
-              category: {
-                connect: { id: categoryId },
-              },
-            })),
-          },
-          locations: data.locationIds
-            ? {
-                create: data.locationIds.map((locationId) => ({
-                  location: {
-                    connect: { id: locationId },
-                  },
-                })),
-              }
-            : undefined,
-          photos: {
-            create: photoUrls.map((url) => ({
-              photoUrl: url,
-            })),
-          },
+      const jobData: Prisma.JobCreateInput = {
+        name: data.name,
+        payment: data.payment,
+        cover: data.cover,
+        customerLink: data.customerLink,
+        discount: data.discount,
+        closingDate: data.closingDate,
+        eventDate: data.eventDate,
+        gift: data.gift,
+        customer: {
+          connect: { id: data.customerId },
         },
+        categories: {
+          create: data.categoryIds.map((categoryId) => ({
+            category: {
+              connect: { id: categoryId },
+            },
+            assignedAt: new Date(),
+          })),
+        },
+        locations: data.locationIds
+          ? {
+              create: data.locationIds.map((locationId) => ({
+                location: {
+                  connect: { id: locationId },
+                },
+                assignedAt: new Date(),
+              })),
+            }
+          : undefined,
+      };
+
+      const job = await this.prisma.job.create({
+        data: jobData,
         include: {
           customer: true,
-          categories: {
-            include: {
-              category: true,
-            },
-          },
-          locations: {
-            include: {
-              location: true,
-            },
-          },
+          categories: { include: { category: true } },
+          locations: { include: { location: true } },
           photos: true,
         },
       });
+
+      const workType = await Promise.all(
+        data.categoryIds.map(async (categoryId) => {
+          const category = await this.prisma.category.findUnique({
+            where: { id: categoryId },
+          });
+          return category?.name;
+        }),
+      ).then((names) => names.join(', '));
+
+      const jobName = data.name;
+
+      // Upload de fotos
+      if (files && files.length > 0) {
+        this.jobPhotosService.uploadPhotos(
+          String(job.id),
+          files,
+          workType,
+          jobName,
+        );
+      }
 
       return job;
     } catch (error) {
@@ -177,103 +147,73 @@ export class JobService {
     files?: Express.Multer.File[],
   ): Promise<Job> {
     const { where, data } = params;
-    const job = await this.prisma.job.findUnique({ where });
+
+    const job = await this.prisma.job.findUnique({
+      where,
+      include: {
+        categories: { include: { category: true } },
+      },
+    });
 
     if (!job) {
       throw new NotFoundException(`Job not found`);
     }
 
-    if (data.customerId) {
-      const customer = await this.prisma.user.findUnique({
-        where: { id: data.customerId },
-      });
-      if (!customer) {
-        throw new NotFoundException(
-          `Customer with ID ${data.customerId} not found`,
-        );
-      }
-    }
-
-    if (data.categoryIds) {
-      for (const categoryId of data.categoryIds) {
-        const category = await this.prisma.category.findUnique({
-          where: { id: categoryId },
-        });
-        if (!category) {
-          throw new NotFoundException(
-            `Category with ID ${categoryId} not found`,
-          );
-        }
-      }
-    }
-
-    if (data.locationIds) {
-      for (const locationId of data.locationIds) {
-        const location = await this.prisma.location.findUnique({
-          where: { id: locationId },
-        });
-        if (!location) {
-          throw new NotFoundException(
-            `Location with ID ${locationId} not found`,
-          );
-        }
-      }
-    }
-
-    const photoUrls: string[] = [];
-    if (files && files.length > 0) {
-      // Create or reuse existing Pinata group
-      const photoGroup = await this.pinataService.createGroup(
-        `Job-${job.customerId}-Photos`,
-      );
-
-      for (const file of files) {
-        const uploadResult = await this.pinataService.uploadFileToGroup(
-          photoGroup.id,
-          file,
-        );
-        photoUrls.push(uploadResult.url);
-      }
-    }
-
     try {
-      return await this.prisma.job.update({
+      const updateData: Prisma.JobUpdateInput = {
+        name: data.name, // Novo campo name
+        payment: data.payment,
+        cover: data.cover,
+        customerLink: data.customerLink,
+        discount: data.discount,
+        closingDate: data.closingDate,
+        eventDate: data.eventDate,
+        gift: data.gift,
+      };
+
+      if (data.customerId) {
+        const customer = await this.prisma.user.findUnique({
+          where: { id: data.customerId },
+        });
+        if (!customer) {
+          throw new NotFoundException(
+            `Customer with ID ${data.customerId} not found`,
+          );
+        }
+        updateData.customer = { connect: { id: data.customerId } };
+      }
+
+      if (data.categoryIds) {
+        await this.prisma.jobCategory.deleteMany({
+          where: { jobId: where.id },
+        });
+        updateData.categories = {
+          create: data.categoryIds.map((categoryId) => ({
+            category: {
+              connect: { id: categoryId },
+            },
+            assignedAt: new Date(),
+          })),
+        };
+      }
+
+      if (data.locationIds) {
+        await this.prisma.jobLocation.deleteMany({
+          where: { jobId: where.id },
+        });
+        updateData.locations = {
+          create: data.locationIds.map((locationId) => ({
+            location: {
+              connect: { id: locationId },
+            },
+            assignedAt: new Date(),
+          })),
+        };
+      }
+
+      const updatedJob = await this.prisma.job.update({
         where,
-        data: {
-          payment: data.payment,
-          customerLink: data.customerLink,
-          discount: data.discount,
-          closingDate: data.closingDate,
-          eventDate: data.eventDate,
-          gift: data.gift,
-          customer: data.customerId
-            ? { connect: { id: data.customerId } }
-            : undefined,
-          categories: data.categoryIds
-            ? {
-                deleteMany: { jobId: job.id },
-                create: data.categoryIds.map((categoryId) => ({
-                  category: { connect: { id: categoryId } },
-                })),
-              }
-            : undefined,
-          locations: data.locationIds
-            ? {
-                deleteMany: { jobId: job.id },
-                create: data.locationIds.map((locationId) => ({
-                  location: { connect: { id: locationId } },
-                })),
-              }
-            : undefined,
-          photos:
-            photoUrls.length > 0
-              ? {
-                  create: photoUrls.map((url) => ({
-                    photoUrl: url,
-                  })),
-                }
-              : undefined,
-        },
+        data: updateData,
         include: {
           customer: true,
           categories: { include: { category: true } },
@@ -281,6 +221,31 @@ export class JobService {
           photos: true,
         },
       });
+
+      // Atualizar fotos
+      const workType =
+        data.categoryIds
+          ?.map((categoryId) => {
+            const category = job.categories.find(
+              (cat) => cat.category.id === categoryId,
+            );
+            return category?.category.name;
+          })
+          .join(', ') ||
+        job.categories.map((category) => category.category.name).join(', ');
+
+      const jobName = data.name || job.name;
+
+      if (files && files.length > 0) {
+        await this.jobPhotosService.uploadPhotos(
+          String(updatedJob.id),
+          files,
+          workType,
+          jobName,
+        );
+      }
+
+      return updatedJob;
     } catch (error) {
       throw new BadRequestException(`Failed to update job: ${error.message}`);
     }

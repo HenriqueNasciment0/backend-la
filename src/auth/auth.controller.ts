@@ -12,6 +12,7 @@ import { UserService } from '../user/user.service';
 import { LocalAuthGuard } from './local-auth.guard';
 import { Response, Request } from 'express';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { RefreshTokenGuard } from './refresh-token.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -33,7 +34,7 @@ export class AuthController {
     return this.authService.getCurrentUser(req);
   }
 
-  @UseGuards(LocalAuthGuard)
+  @UseGuards(RefreshTokenGuard)
   @Post('refresh-token')
   async refreshToken(@Req() req: any, @Res() res: Response) {
     await this.authService.refreshToken(req, res);
@@ -57,5 +58,11 @@ export class AuthController {
       name,
       password: hashedPassword,
     });
+  }
+
+  @Post('logout')
+  async logout(@Req() req: Request, @Res() res: Response) {
+    await this.authService.logout(req, res);
+    return res.status(200).json({ message: 'Logout successful', status: 200 });
   }
 }
