@@ -33,7 +33,7 @@ export class AuthService {
     const payload: JwtPayload = { email: user.email, sub: user.id };
     const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
 
-    const refreshTokenEntry = await this.prisma.refreshToken.create({
+    const refreshTokenEntry = await this.prisma.client.refreshToken.create({
       data: {
         userId: user.id,
         expiresAt: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
@@ -78,11 +78,11 @@ export class AuthService {
 
     const now = new Date();
 
-    await this.prisma.refreshToken.deleteMany({
+    await this.prisma.client.refreshToken.deleteMany({
       where: { expiresAt: { lt: now } },
     });
 
-    const storedToken = await this.prisma.refreshToken.findUnique({
+    const storedToken = await this.prisma.client.refreshToken.findUnique({
       where: { id: payload.tokenId },
     });
 
@@ -90,12 +90,12 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token is invalid or revoked');
     }
 
-    await this.prisma.refreshToken.update({
+    await this.prisma.client.refreshToken.update({
       where: { id: storedToken.id },
       data: { revoked: true },
     });
 
-    const newToken = await this.prisma.refreshToken.create({
+    const newToken = await this.prisma.client.refreshToken.create({
       data: {
         userId: payload.sub,
         expiresAt: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
@@ -168,7 +168,7 @@ export class AuthService {
     if (refreshToken) {
       try {
         const payload = this.jwtService.verify(refreshToken);
-        await this.prisma.refreshToken.update({
+        await this.prisma.client.refreshToken.update({
           where: { id: payload.tokenId },
           data: { revoked: true },
         });

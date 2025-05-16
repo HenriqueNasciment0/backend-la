@@ -7,7 +7,7 @@ export class CategoryService {
   constructor(private prisma: PrismaService) {}
 
   async getCategories(): Promise<Category[]> {
-    return this.prisma.category.findMany({
+    return this.prisma.client.category.findMany({
       orderBy: {
         price: 'asc',
       },
@@ -17,11 +17,11 @@ export class CategoryService {
   async getCategoryById(
     where: Prisma.CategoryWhereUniqueInput,
   ): Promise<Category | null> {
-    return this.prisma.category.findUnique({ where });
+    return this.prisma.client.category.findUnique({ where });
   }
 
   async createCategory(data: Prisma.CategoryCreateInput): Promise<Category> {
-    return this.prisma.category.create({ data });
+    return this.prisma.client.category.create({ data });
   }
 
   async updateCategory(params: {
@@ -29,7 +29,7 @@ export class CategoryService {
     data: Prisma.CategoryUpdateInput;
   }): Promise<Category> {
     const { where, data } = params;
-    return this.prisma.category.update({
+    return this.prisma.client.category.update({
       data: {
         ...data,
         updatedAt: new Date(),
@@ -41,6 +41,6 @@ export class CategoryService {
   async deleteCategory(
     where: Prisma.CategoryWhereUniqueInput,
   ): Promise<Category> {
-    return this.prisma.category.delete({ where });
+    return this.prisma.client.category.delete({ where });
   }
 }

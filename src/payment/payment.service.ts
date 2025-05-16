@@ -7,7 +7,7 @@ export class PaymentService {
   constructor(private prisma: PrismaService) {}
 
   async getPayment(): Promise<Payment[]> {
-    return this.prisma.payment.findMany({
+    return this.prisma.client.payment.findMany({
       orderBy: {
         createdAt: 'asc',
       },
@@ -17,11 +17,11 @@ export class PaymentService {
   async getPaymentById(
     where: Prisma.PaymentWhereUniqueInput,
   ): Promise<Payment> {
-    return this.prisma.payment.findUnique({ where });
+    return this.prisma.client.payment.findUnique({ where });
   }
 
   async createPayment(data: Prisma.PaymentCreateInput): Promise<Payment> {
-    return this.prisma.payment.create({ data });
+    return this.prisma.client.payment.create({ data });
   }
 
   async updatePayment(params: {
@@ -29,7 +29,7 @@ export class PaymentService {
     data: Prisma.PaymentUpdateInput;
   }) {
     const { where, data } = params;
-    return this.prisma.payment.update({
+    return this.prisma.client.payment.update({
       data: {
         ...data,
         updatedAt: new Date(),
@@ -39,6 +39,6 @@ export class PaymentService {
   }
 
   async deletePayment(where: Prisma.PaymentWhereUniqueInput): Promise<Payment> {
-    return this.prisma.payment.delete({ where });
+    return this.prisma.client.payment.delete({ where });
   }
 }

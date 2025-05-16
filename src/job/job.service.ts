@@ -18,7 +18,7 @@ export class JobService {
   ) {}
 
   async getJobs(): Promise<Job[]> {
-    return this.prisma.job.findMany({
+    return this.prisma.client.job.findMany({
       include: {
         customer: true,
         categories: { include: { category: true } },
@@ -30,7 +30,7 @@ export class JobService {
   }
 
   async getJobById(where: Prisma.JobWhereUniqueInput): Promise<Job | null> {
-    return this.prisma.job.findUnique({
+    return this.prisma.client.job.findUnique({
       where,
       include: {
         customer: true,
@@ -60,7 +60,7 @@ export class JobService {
       throw new BadRequestException('Validation failed');
     }
 
-    const customer = await this.prisma.user.findUnique({
+    const customer = await this.prisma.client.user.findUnique({
       where: { id: data.customerId },
     });
     if (!customer) {
@@ -102,7 +102,7 @@ export class JobService {
           : undefined,
       };
 
-      const job = await this.prisma.job.create({
+      const job = await this.prisma.client.job.create({
         data: jobData,
         include: {
           customer: true,
@@ -114,7 +114,7 @@ export class JobService {
 
       const workType = await Promise.all(
         data.categoryIds.map(async (categoryId) => {
-          const category = await this.prisma.category.findUnique({
+          const category = await this.prisma.client.category.findUnique({
             where: { id: categoryId },
           });
           return category?.name;
@@ -148,7 +148,7 @@ export class JobService {
   ): Promise<Job> {
     const { where, data } = params;
 
-    const job = await this.prisma.job.findUnique({
+    const job = await this.prisma.client.job.findUnique({
       where,
       include: {
         categories: { include: { category: true } },
@@ -172,7 +172,7 @@ export class JobService {
       };
 
       if (data.customerId) {
-        const customer = await this.prisma.user.findUnique({
+        const customer = await this.prisma.client.user.findUnique({
           where: { id: data.customerId },
         });
         if (!customer) {
@@ -184,7 +184,7 @@ export class JobService {
       }
 
       if (data.categoryIds) {
-        await this.prisma.jobCategory.deleteMany({
+        await this.prisma.client.jobCategory.deleteMany({
           where: { jobId: where.id },
         });
         updateData.categories = {
@@ -198,7 +198,7 @@ export class JobService {
       }
 
       if (data.locationIds) {
-        await this.prisma.jobLocation.deleteMany({
+        await this.prisma.client.jobLocation.deleteMany({
           where: { jobId: where.id },
         });
         updateData.locations = {
@@ -211,7 +211,7 @@ export class JobService {
         };
       }
 
-      const updatedJob = await this.prisma.job.update({
+      const updatedJob = await this.prisma.client.job.update({
         where,
         data: updateData,
         include: {
@@ -252,15 +252,15 @@ export class JobService {
   }
 
   async deleteJob(where: Prisma.JobWhereUniqueInput): Promise<Job> {
-    await this.prisma.jobCategory.deleteMany({
+    await this.prisma.client.jobCategory.deleteMany({
       where: { jobId: where.id },
     });
 
-    await this.prisma.jobLocation.deleteMany({
+    await this.prisma.client.jobLocation.deleteMany({
       where: { jobId: where.id },
     });
 
-    return this.prisma.job.delete({
+    return this.prisma.client.job.delete({
       where,
       include: {
         customer: true,

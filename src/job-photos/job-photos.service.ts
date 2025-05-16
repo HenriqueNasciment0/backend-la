@@ -25,7 +25,7 @@ export class JobPhotosService {
       ),
     );
 
-    await this.prisma.jobPhoto.createMany({
+    await this.prisma.client.jobPhoto.createMany({
       data: fileKeys.map((fileKey) => ({
         photoUrl: fileKey,
         jobId: Number(jobId),
