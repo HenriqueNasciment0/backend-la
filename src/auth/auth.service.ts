@@ -148,10 +148,7 @@ export class AuthService {
     }
 
     return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      // admin: user.admin,
+      validated: true,
     };
   }
 
